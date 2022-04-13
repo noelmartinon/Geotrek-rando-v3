@@ -79,4 +79,7 @@ module.exports = withPlugins(plugins, {
     filter: getConfig('filter.json', true),
     footer: getConfig('footer.json', true),
   },
+  compiler: {
+    styledComponents: true,
+  },
 });
