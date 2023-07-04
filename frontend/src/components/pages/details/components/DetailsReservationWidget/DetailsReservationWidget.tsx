@@ -1,5 +1,5 @@
 import { Reservation } from 'modules/details/interface';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import Loader from 'components/Loader';
 import Script from 'next/script';
 import Head from 'next/head';
@@ -17,7 +17,18 @@ interface DetailsReservationWidgetProps {
   reservation: Reservation;
   language: string;
 }
-
+const waitForGlobal = async (key: string) => {
+  return new Promise(resolve => {
+    if (key in window) {
+      resolve(true);
+    } else {
+      // eslint-disable-next-line
+      setTimeout(() => {
+        return waitForGlobal(key);
+      }, 100);
+    }
+  });
+};
 export const DetailsReservationWidget: React.FC<DetailsReservationWidgetProps> = ({
   id,
   reservation: { partner, project },
@@ -25,7 +36,6 @@ export const DetailsReservationWidget: React.FC<DetailsReservationWidgetProps> =
 }) => {
   const { asPath } = useRouter();
   const isMounted = useHasMounted();
-  const [stepsLoadedScript, setStepsLoadedScript] = useState<number>(0);
 
   const onLoad = useCallback(() => {
     const layer = {
@@ -35,8 +45,20 @@ export const DetailsReservationWidget: React.FC<DetailsReservationWidgetProps> =
       routeId: id,
       routePage: asPath,
     };
-    const spaClient = window?.eitinerance?.core?.pages?.getSinglePageApplicationClient({ layer });
-    spaClient?.executePage();
+    (core => {
+      void waitForGlobal('eitinerance')
+        .then(() => waitForGlobal('AllianceReseaux'))
+        .then(() => {
+          const spaClient = core.pages?.getSinglePageApplicationClient({ layer });
+          window.AllianceReseaux.jQuery(function () {
+            if (spaClient !== undefined) {
+              spaClient.executePage();
+            } else {
+              onLoad();
+            }
+          });
+        });
+    })(window?.eitinerance?.core);
   }, [asPath, id, language, partner]);
 
   useEffect(() => {
@@ -66,22 +88,13 @@ export const DetailsReservationWidget: React.FC<DetailsReservationWidgetProps> =
         {/* Hide modal due to user inactivity */}
         <style>{`.osi-modal { display: none !important }`}</style>
       </Head>
+      <Script src="https://gadget.open-system.fr/widgets-libs/rel/noyau-2.0.min.js" />
+      <Script src="https://eitinerancecdn.open-system.fr/widgets-eiti/core/core.min.js" />
       <Script
-        src="https://gadget.open-system.fr/widgets-libs/rel/noyau-2.0.min.js"
-        onLoad={() => setStepsLoadedScript(1)}
+        src={`https://eitinerancecdn.open-system.fr/widgets-eiti/${project}/${project}.min.js`}
+        onLoad={() => onLoad()}
+        strategy="lazyOnload"
       />
-      {stepsLoadedScript > 0 && (
-        <Script
-          src="https://eitinerancecdn.open-system.fr/widgets-eiti/core/core.min.js"
-          onLoad={() => setStepsLoadedScript(2)}
-        />
-      )}
-      {stepsLoadedScript > 1 && (
-        <Script
-          src={`https://eitinerancecdn.open-system.fr/widgets-eiti/${project}/${project}.min.js`}
-          onLoad={onLoad}
-        />
-      )}
       <div className="OsItinerance OsItPartner CssCustom">
         <div id="eiti-partner">
           <Loader />
